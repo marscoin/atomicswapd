@@ -152,12 +152,13 @@ export function SwapsTable({ snap, now }: { snap: Snapshot | null; now: number }
                 <td><span className={`state st-${s.state}`}>{STATE_LABEL[s.state] ?? s.state}</span></td>
                 <td className="num">{fmt(s.mars, 0)}</td>
                 <td className="num">{btc(s.btc)}</td>
-                <td className="proof">
+                <td><div className="proof">
                   {s.mars_funding_txid && <a href={MARS_TX(s.mars_funding_txid)} target="_blank" rel="noreferrer" title="MARS locked">MARS lock</a>}
                   {s.btc_funding_txid && <a href={BTC_TX(s.btc_funding_txid)} target="_blank" rel="noreferrer" title="BTC locked">BTC lock</a>}
                   {s.btc_claim_txid && <a href={BTC_TX(s.btc_claim_txid)} target="_blank" rel="noreferrer" title="BTC claimed, secret revealed">BTC claim</a>}
                   {s.mars_claim_txid && <a href={MARS_TX(s.mars_claim_txid)} target="_blank" rel="noreferrer" title="MARS claimed by the buyer">MARS claim</a>}
-                </td>
+                  {!s.mars_funding_txid && <span className="muted small">pending</span>}
+                </div></td>
                 <td className="muted">{ago(s.updated_at, now)}</td>
               </tr>))}
           </tbody>

@@ -144,7 +144,7 @@ function HowTo({ offer, onClose }: { offer: Offer; onClose: () => void }) {
         <h3>Take this offer in Electrum-Mars</h3>
         <p className="muted">Atomic swaps settle wallet to wallet. No account, no deposit, nobody holds your coins.</p>
         <ol className="steps">
-          <li><b>Get Electrum-Mars 4.4.2 or later</b> — <a href={WALLET_URL} target="_blank" rel="noreferrer">download</a> for macOS, Windows or Linux.</li>
+          <li><b>Get Electrum-Mars 4.4.3 or later</b> — <a href={WALLET_URL} target="_blank" rel="noreferrer">download</a> for macOS, Windows or Linux.</li>
           <li>Open the <b>Atomic Swap</b> tab and find offer <code>{offer.id.slice(0, 8)}</code>: {fmt(offer.mars, 0)} MARS for {btc(offer.btc)} BTC. Click <b>Accept</b>.</li>
           <li>Wait a few minutes while the seller locks the MARS. Your wallet checks the lock on the Marscoin chain.</li>
           <li>Send <b>exactly {btc(offer.btc)} BTC</b> to the address your wallet shows, from any Bitcoin wallet.</li>

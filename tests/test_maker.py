@@ -166,3 +166,18 @@ def test_one_pending_swap_per_buyer(tmp_path, monkeypatch):
     assert asyncio.run(acceptance_from('tag-A')) is None
     assert asyncio.run(acceptance_from('tag-B'))['taker_tag'] == 'tag-B'
     assert worker.tags.tags['new'] == 'tag-B'
+
+
+def test_posted_offers_are_not_listed_as_swaps():
+    from atomicswapd.service import Service
+    from atomicswapd.config import Config
+    svc = Service(Config())
+    swaps = [swap('offer'), swap('accepted', peer='03bb'), swap('locked', 'mars_locked', funded=True),
+             swap('old', 'expired')]
+    svc.engine = SimpleNamespace(get_all_swaps=lambda: swaps)
+    svc.node = SimpleNamespace(wallet=SimpleNamespace(get_balance=lambda: (0, 0, 0),
+                                                      get_receiving_address=lambda: 'mars1q'),
+                               status=lambda: {'wallet_ready': True})
+    svc.orderbook = SimpleNamespace(_my_offers={})
+    shown = [s['id'] for s in svc.maker_status()['swaps']]
+    assert sorted(shown) == ['accepted', 'locked']

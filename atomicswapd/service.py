@@ -224,8 +224,10 @@ class Service:
                           'btc': o.btc_amount_sat / policy.COIN, 'rate': o.rate,
                           'expires_in': round(o.expires_at - now)}
                          for o in my_offers]
+        # A posted offer is a 'created' swap with no buyer yet; those belong
+        # to the order book, not to the list of swaps.
         shown = [s for s in sorted(maker_swaps, key=lambda s: s.updated_at, reverse=True)
-                 if s.state != 'expired'][:25]
+                 if s.state != 'expired' and not (s.state == 'created' and not s.peer_pubkey)][:25]
         out['swaps'] = [public_swap(s) for s in shown]
         out['totals'] = {
             'completed': sum(1 for s in maker_swaps if s.state in ('btc_claimed', 'completed')),
