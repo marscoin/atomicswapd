@@ -66,11 +66,22 @@ export function useSnapshot() {
 export function useHistory() {
   const [history, setHistory] = useState<History | null>(null)
   useEffect(() => {
-    let timer: number
-    const load = () => fetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {})
+    let timer: number | undefined
+    let stopped = false
+    // Right after the engine starts (always the case in the desktop app) the
+    // history isn't fetched yet: retry soon until it arrives, then every 5 min.
+    const load = async () => {
+      let ready = false
+      try {
+        await desktopSession()
+        const h: History = await (await fetch('/api/history')).json()
+        setHistory(h)
+        ready = (h.mars_btc?.length ?? 0) > 0
+      } catch { /* try again */ }
+      if (!stopped) timer = window.setTimeout(load, ready ? 5 * 60_000 : 5_000)
+    }
     load()
-    timer = window.setInterval(load, 5 * 60_000)
-    return () => window.clearInterval(timer)
+    return () => { stopped = true; window.clearTimeout(timer) }
   }, [])
   return history
 }
