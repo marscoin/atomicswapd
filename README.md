@@ -4,6 +4,10 @@ A headless market maker for **BTC ↔ MARS atomic swaps**.
 
 `atomicswapd` is the first maker on an open exchange, not the exchange itself. The exchange is the protocol: the order book relayed by Marscoin's ElectrumX servers, plus hash time-locked contracts (HTLCs) on both chains. Anyone with an [Electrum-Mars](https://github.com/marscoin/electrum-mars) wallet can take an offer, and anyone can run this daemon to make their own.
 
+[![The live dashboard at swaps.marscoin.org](docs/dashboard.png)](https://swaps.marscoin.org)
+
+*The first maker, live at [swaps.marscoin.org](https://swaps.marscoin.org): real offers on the Marscoin relays, both chains, and a quote for each offer with the checks a 4.4.2+ wallet makes.*
+
 > **Status: first release.** Runs on mainnet: Marscoin has no public test network to swap against. The daemon starts in **watch** mode, with a real wallet and real data, posting and locking nothing. Switching to **live** is one setting. Keep the hot wallet small.
 
 ## How a swap works
