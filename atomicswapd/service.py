@@ -325,7 +325,7 @@ class Service:
     # ------------------------------------------------------------ history
 
     async def _poll_history(self):
-        url = 'https://api.coingecko.com/api/v3/coins/marscoin/market_chart?vs_currency={}&days=7'
+        url = 'https://api.coingecko.com/api/v3/coins/marscoin/market_chart?vs_currency={}&days=30'
         while not self.stop.is_set():
             for key, cur in (('mars_btc', 'btc'), ('mars_usd', 'usd')):
                 try:
@@ -373,15 +373,27 @@ class Service:
 
     # ------------------------------------------------------------ run
 
+    async def _wait_for_price(self, timeout: float):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline and not self.stop.is_set():
+            if self.market.market.mars_btc:
+                return True
+            await asyncio.sleep(0.5)
+        log.warning('no market price after %.0f s; the maker will retry at its next refresh', timeout)
+        return False
+
     async def run(self):
         timeout = aiohttp.ClientTimeout(total=20)
         self.session = aiohttp.ClientSession(timeout=timeout,
                                              headers={'User-Agent': f'atomicswapd/{__version__}'})
         self.market = MarketFeed(self.session)
         self.market.on_btc_block = self._on_btc_block
-        await self.start_maker()
         tasks = [asyncio.create_task(r.run(self.stop)) for r in self.relays]
         tasks.append(asyncio.create_task(self.market.run(self.stop, self.cfg.market_seconds)))
+        # The Auto-Maker posts its first offers as soon as it starts; give it
+        # a price to work with, or it skips a whole refresh interval.
+        await self._wait_for_price(45)
+        await self.start_maker()
         tasks.append(asyncio.create_task(self._poll_book()))
         tasks.append(asyncio.create_task(self._poll_history()))
         try:

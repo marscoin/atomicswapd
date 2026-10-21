@@ -66,7 +66,7 @@ function Tick({ label, source, href, children }:
     : <div className="tick" data-src={source}>{body}</div>
 }
 
-const RANGES = { '24H': 86400, '7D': 7 * 86400 } as const
+const RANGES = { '24H': 86400, '7D': 7 * 86400, '14D': 14 * 86400, '30D': 30 * 86400 } as const
 
 export function PriceChart({ history, snap }: { history: History | null; snap: Snapshot | null }) {
   const box = useRef<HTMLDivElement>(null)

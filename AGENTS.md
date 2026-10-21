@@ -71,7 +71,14 @@ fly apps restart <app>
 fly secrets set ATOMICSWAPD_BTC_ADDRESS=<operator's bc1 address> -a <app>
 ```
 
-Check: `atomicswapd status https://<app>.fly.dev --json` shows stage `syncing`. On a new volume, the headers take 45–90 minutes.
+Check: `atomicswapd status https://<app>.fly.dev --json` shows stage `syncing`.
+
+On a new volume the node checks about 3.6 million headers. Shared CPUs are throttled under sustained load, so this takes about 4 hours. With the operator's OK (it costs a few cents), use a dedicated CPU while syncing and scale back afterwards:
+
+```sh
+fly scale vm performance-1x --memory 2048 -a <app>     # while the stage is syncing
+fly scale vm shared-cpu-1x --memory 1024 -a <app>      # once it leaves syncing
+```
 
 **5. Fund.** Give the operator the deposit address from the status output.
 - Suggest a small test amount first.
@@ -79,15 +86,15 @@ Check: `atomicswapd status https://<app>.fly.dev --json` shows stage `syncing`. 
 
 Check: the stage moves from `needs_funds` to `ready`.
 
-**6. Review with the operator.** Show them the `would_post` offers from the status output: sizes, BTC prices, and spread over market.
+**6. Review with the operator.** Show them the `would_post` offers from the status output: sizes, BTC prices, and spread over market. Ask which minimum spread they want. The default is 5%; tiers add +2 points each.
 
 **7. Go live, only with the operator's approval.**
 
 ```sh
-fly secrets set ATOMICSWAPD_MODE=live -a <app>
+fly secrets set ATOMICSWAPD_FEE_PERCENT=<spread> ATOMICSWAPD_MODE=live -a <app>
 ```
 
-Check: within about 5 minutes the stage is `live` and `offers_posted` is above 0. `atomicswapd status` exits with code 0 only when live.
+Check: within a minute or two the stage is `live` and `offers_posted` is above 0. `atomicswapd status` exits with code 0 only when live. If there are no offers after a few minutes, read `.market.error`: without a fresh price the maker posts nothing.
 
 ## Reading the state
 

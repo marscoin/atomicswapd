@@ -68,7 +68,9 @@ AI agents: see [AGENTS.md](AGENTS.md) for the same procedure with checks at ever
 
 ### On fly.io (about $6 a month)
 
-[Install flyctl](https://fly.io/docs/flyctl/install/), run `fly auth login`, clone this repo, and pick a unique app name:
+[Install flyctl](https://fly.io/docs/flyctl/install/), run `fly auth login`, clone this repo, and pick a unique app name. Each step below says what you should see.
+
+**1. Deploy.**
 
 ```sh
 deploy/fly.sh my-mars-maker          # app, 3 GB volume, random wallet password, deploy
@@ -76,7 +78,14 @@ deploy/fly.sh my-mars-maker          # app, 3 GB volume, random wallet password,
 
 The script is safe to run again. It generates the wallet password on your machine, stores it as a fly secret and never prints it. Your dashboard is now at `https://my-mars-maker.fly.dev`, in **watch** mode.
 
-Create the hot wallet. Either print the seed once and write it down:
+**2. Speed up the first sync (optional, recommended).** On first start the node downloads and checks about 3.6 million Marscoin block headers. On fly's shared CPU this crawls (about 4 hours), because shared CPUs are throttled under sustained load. A dedicated CPU does it in about 30 minutes, for a few cents:
+
+```sh
+fly scale vm performance-1x --memory 2048 -a my-mars-maker     # while syncing
+fly scale vm shared-cpu-1x --memory 1024 -a my-mars-maker      # once the top bar no longer says "Syncing"
+```
+
+**3. Create the hot wallet.** Either print the seed once and write it down:
 
 ```sh
 fly ssh console -a my-mars-maker -C "atomicswapd wallet create"
@@ -90,26 +99,42 @@ fly ssh sftp get /data/seed-backup.txt -a my-mars-maker      # keep it offline
 fly ssh console -a my-mars-maker -C "rm /data/seed-backup.txt"
 ```
 
-Then:
+**4. Load the wallet and set where the BTC goes.**
 
 ```sh
-fly apps restart my-mars-maker                                        # load the wallet
+fly apps restart my-mars-maker                                        # the daemon opens the wallet on start
 fly secrets set ATOMICSWAPD_BTC_ADDRESS=bc1q... -a my-mars-maker      # your payout address
 ```
 
-Send MARS to the deposit address on the dashboard. Send a few MARS first to check your wallet can send to a `mars1` address. Watch the setup stage:
+**5. Fund it.** Send MARS to the deposit address on the dashboard. Send a few MARS first to check your wallet can send to a `mars1` address. After each deposit the dashboard shows a fresh address; all of them belong to the maker's wallet. The balance appears once the headers are synced. Watch the setup stage:
 
 ```sh
 atomicswapd status https://my-mars-maker.fly.dev     # or: curl -s .../api/snapshot | jq .setup
 ```
 
-When it says `ready`, look at **Would post now** on the dashboard. If those offers are what you want to sell, go live:
+**6. Choose a spread and go live.** When the stage is `ready`, look at **Would post now** on the dashboard. The default floor is 5% over the market price (tiers at +5%, +7%, +9%). To change it, and to go live:
 
 ```sh
-fly secrets set ATOMICSWAPD_MODE=live -a my-mars-maker
+fly secrets set ATOMICSWAPD_FEE_PERCENT=8 ATOMICSWAPD_MODE=live -a my-mars-maker
 ```
 
-To pause, set `ATOMICSWAPD_MODE=watch`. Swaps already in progress always finish or refund, in either mode.
+Within a minute your offers appear in the order book, marked **OURS**, and `atomicswapd status` says `live` (it exits 0 only when live). Offers refresh every 5 minutes at the current price and expire after 15 unless refreshed.
+
+**Day to day:**
+- **Pause:** `fly secrets set ATOMICSWAPD_MODE=watch -a my-mars-maker`. Swaps already in progress still finish or refund.
+- **Logs:** `fly logs -a my-mars-maker`.
+- **Update:** pull this repo and run `deploy/fly.sh my-mars-maker` again. Headers, wallet and swaps live on the volume and survive deploys.
+- **Your own domain:** `fly certs add swaps.example.org -a my-mars-maker`, then a DNS-only CNAME from `swaps.example.org` to `my-mars-maker.fly.dev`. The certificate is issued within minutes.
+
+**If something's off:**
+
+| What you see | Why, and what to do |
+|---|---|
+| Top bar says "Syncing" for hours | Shared-CPU throttling. Do step 2. |
+| Stage `needs_wallet` after creating one | The daemon opens the wallet at start. `fly apps restart`. |
+| Stage `wallet_error` | Usually a different `ATOMICSWAPD_WALLET_PASSWORD` than the wallet was created with. Don't create a new wallet over the old one. |
+| `needs_funds` although you sent MARS | Wait for a block, and for the sync to finish. Below 667 MARS nothing is posted with the default 30% cap. |
+| Live, but no offers | Check `.market.error` in `/api/snapshot`. Without a fresh price the maker posts nothing, by design. |
 
 ### With Docker anywhere
 
@@ -157,7 +182,7 @@ Everything else (spread, offer sizes, exposure cap, reserve, daily limit, relays
 All read-only:
 - `GET /api/snapshot`: everything the dashboard shows, including `setup` (stage and next step).
 - `GET /api/stream`: the same snapshot as server-sent events, on every change.
-- `GET /api/history`: seven days of MARS/BTC and MARS/USD market prices.
+- `GET /api/history`: 30 days of hourly MARS/BTC and MARS/USD market prices.
 - `GET /healthz`
 
 No keys, secrets or swap preimages are ever part of a response.

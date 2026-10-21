@@ -41,16 +41,22 @@ def _run(cfg):
     future = asyncio.run_coroutine_threadsafe(main(), dash_loop)
 
     def on_term(signum, frame):
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)   # one is enough
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, on_term)
     try:
-        node.run_until_stopped()
+        node.run_until_stopped()   # returns once wallets and network are stopped and saved
     finally:
         dash_loop.call_soon_threadsafe(service.stop.set)
         try:
             future.result(timeout=10)
         except Exception:
             pass
+        logging.getLogger(__name__).info('stopped')
+        logging.shutdown()
+        # Electrum leaves helper threads behind; everything is saved, so
+        # don't wait for them (that wait is what the platform kills).
+        os._exit(0)
 
 
 def _run_without_node(cfg):
