@@ -58,6 +58,14 @@ def test_live_needs_a_payout_address():
     assert cfg.maker.btc_receive_address == 'bc1qx'
 
 
+def test_fee_from_environment():
+    assert config.load(env={'ATOMICSWAPD_FEE_PERCENT': '8'}).maker.fee_percent == 8.0
+    with pytest.raises(config.ConfigError):
+        config.load(env={'ATOMICSWAPD_FEE_PERCENT': 'eight'})
+    with pytest.raises(config.ConfigError):
+        config.load(env={'ATOMICSWAPD_FEE_PERCENT': '-1'})
+
+
 def test_rejects_unknown_and_unsafe_settings():
     with pytest.raises(config.ConfigError, match='unknown'):
         config.from_dict({'maker': {'inventroy_cap_percent': 30}})

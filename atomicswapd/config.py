@@ -152,6 +152,11 @@ def load(path: Optional[str] = None, env=os.environ) -> Config:
         cfg.data_dir = env['ATOMICSWAPD_DATA']
     if env.get('ATOMICSWAPD_BTC_ADDRESS'):
         cfg.maker.btc_receive_address = env['ATOMICSWAPD_BTC_ADDRESS'].strip()
+    if env.get('ATOMICSWAPD_FEE_PERCENT'):
+        try:
+            cfg.maker.fee_percent = float(env['ATOMICSWAPD_FEE_PERCENT'])
+        except ValueError:
+            raise ConfigError('ATOMICSWAPD_FEE_PERCENT must be a number, e.g. 8')
     if env.get('PORT'):
         cfg.api_port = int(env['PORT'])
     return cfg.validate()

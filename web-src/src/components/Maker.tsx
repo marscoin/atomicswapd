@@ -85,9 +85,9 @@ function Gauge({ snap }: { snap: Snapshot }) {
     <div className="gauge">
       <svg viewBox="0 0 140 140" width="140" height="140">
         <circle cx="70" cy="70" r={R} className="g-track" />
-        <circle cx="70" cy="70" r={R} className="g-locked" strokeDasharray={`${locked} ${C}`} transform="rotate(-90 70 70)" />
-        <circle cx="70" cy="70" r={R} className="g-offer" strokeDasharray={`${offered} ${C}`}
-          strokeDashoffset={-locked} transform="rotate(-90 70 70)" />
+        {locked > 0.5 && <circle cx="70" cy="70" r={R} className="g-locked" strokeDasharray={`${locked} ${C}`} transform="rotate(-90 70 70)" />}
+        {offered > 0.5 && <circle cx="70" cy="70" r={R} className="g-offer" strokeDasharray={`${offered} ${C}`}
+          strokeDashoffset={-locked} transform="rotate(-90 70 70)" />}
         <line x1={70 + (R - 11) * Math.cos(capAngle)} y1={70 + (R - 11) * Math.sin(capAngle)}
           x2={70 + (R + 11) * Math.cos(capAngle)} y2={70 + (R + 11) * Math.sin(capAngle)} className="g-cap" />
       </svg>

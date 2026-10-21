@@ -146,6 +146,7 @@ Environment variables cover the essentials:
 | `ATOMICSWAPD_WALLET_PASSWORD` | Encrypts the wallet file. Required. |
 | `ATOMICSWAPD_BTC_ADDRESS` | Where BTC from swaps goes. Required for live. |
 | `ATOMICSWAPD_MODE` | `watch` (default) or `live`. |
+| `ATOMICSWAPD_FEE_PERCENT` | Minimum spread over the market price (default 5). |
 | `ATOMICSWAPD_DATA` | Data directory (default `/data`). |
 | `ATOMICSWAPD_CONFIG` | Optional TOML file for everything else. |
 
