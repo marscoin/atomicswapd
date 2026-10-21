@@ -173,6 +173,24 @@ def _status(url, as_json):
     return 0 if summary['stage'] == 'live' else 2
 
 
+def _selftest():
+    """Import everything a live engine uses, including the native libraries,
+    so a packaged build that is missing something fails here, not later."""
+    import importlib
+    for name in ('atomicswapd.node', 'atomicswapd.maker', 'atomicswapd.service', 'atomicswapd.api',
+                 'electrum_mars.daemon', 'electrum_mars.wallet', 'electrum_mars.ecc_fast',
+                 'electrum_mars.plugins.atomic_swap.swap_worker',
+                 'electrum_mars.plugins.atomic_swap.automaker'):
+        importlib.import_module(name)
+    from electrum_mars import blockchain, ecc
+    ecc.ECPrivkey.generate_random_key()               # libsecp256k1 works
+    if not blockchain.SCRYPT_NATIVE:
+        print('selftest: native scrypt is missing', file=sys.stderr)
+        return 1
+    print(f'selftest ok: atomicswapd {__version__}')
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='atomicswapd', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -190,12 +208,16 @@ def main(argv=None):
     w.add_argument('--seed-file', help='write the new seed to this file (mode 0600) '
                                        'instead of printing it')
     sub.add_parser('check', help='validate the configuration and exit')
+    sub.add_parser('selftest', help='load the whole engine (wallet, swap code, native '
+                                    'libraries) and exit; for packaged builds')
     st = sub.add_parser('status', help="a running maker's setup stage and next step")
     st.add_argument('url', nargs='?', help='dashboard URL (default http://localhost:8080)')
     st.add_argument('--json', action='store_true', help='machine-readable output')
     args = parser.parse_args(argv)
     if args.command == 'status':
         sys.exit(_status(args.url, args.json))
+    if args.command == 'selftest':
+        sys.exit(_selftest())
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     # Electrum-Mars logs every request at INFO; keep it quiet unless asked.
