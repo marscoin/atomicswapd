@@ -20,8 +20,20 @@ from . import __version__
 from .config import ConfigError, load
 
 
-def _run(cfg):
+DESKTOP_TOKEN_ENV = 'ATOMICSWAPD_SESSION_TOKEN'
+
+
+async def _serve(service, cfg, desktop_token):
     from .api import serve
+    runner, port = await serve(service, cfg.api_host, cfg.api_port, cfg.max_stream_clients,
+                               desktop_token)
+    if desktop_token:
+        # The desktop shell waits for this line to open its window.
+        print(f'ATOMICSWAPD_READY http://127.0.0.1:{port}', flush=True)
+    return runner
+
+
+def _run(cfg, desktop_token=None):
     from .node import Node
     from .service import Service
 
@@ -29,7 +41,7 @@ def _run(cfg):
     service = Service(cfg, node)
 
     async def main():
-        runner = await serve(service, cfg.api_host, cfg.api_port, cfg.max_stream_clients)
+        runner = await _serve(service, cfg, desktop_token)
         try:
             await service.run()
         finally:
@@ -59,15 +71,14 @@ def _run(cfg):
         os._exit(0)
 
 
-def _run_without_node(cfg):
+def _run_without_node(cfg, desktop_token=None):
     """Development: the dashboard on real relay and market data, without
     the Electrum-Mars node or a wallet."""
-    from .api import serve
     from .service import Service
 
     async def main():
         service = Service(cfg, node=None)
-        runner = await serve(service, cfg.api_host, cfg.api_port, cfg.max_stream_clients)
+        runner = await _serve(service, cfg, desktop_token)
         try:
             await service.run()
         finally:
@@ -153,6 +164,10 @@ def main(argv=None):
     parser.add_argument('--version', action='version', version=f'atomicswapd {__version__}')
     parser.add_argument('--no-node', action='store_true',
                         help='development: dashboard only, without the wallet node')
+    parser.add_argument('--desktop', action='store_true',
+                        help='run as the engine of the desktop app: 127.0.0.1 only, '
+                             f'API locked to the window holding ${DESKTOP_TOKEN_ENV}')
+    parser.add_argument('--port', type=int, help='HTTP port (0 = any free port)')
     sub = parser.add_subparsers(dest='command')
     w = sub.add_parser('wallet', help='manage the hot wallet')
     w.add_argument('action', choices=['create', 'address'])
@@ -177,14 +192,24 @@ def main(argv=None):
             check_btc_address(cfg.maker.btc_receive_address)
     except ConfigError as e:
         sys.exit(f'configuration error: {e}')
+    desktop_token = None
+    if args.port is not None:
+        cfg.api_port = args.port
+    if args.desktop:
+        cfg.api_host = '127.0.0.1'
+        desktop_token = os.environ.get(DESKTOP_TOKEN_ENV)
+        if not desktop_token:
+            import secrets
+            desktop_token = secrets.token_hex(32)
+            print(f'No {DESKTOP_TOKEN_ENV} given; this session\'s token is {desktop_token}', flush=True)
     if args.command == 'wallet':
         _wallet(cfg, args.action, getattr(args, 'seed_file', None))
     elif args.command == 'check':
         print(f'ok: mode={cfg.mode}, {len(cfg.servers)} relays, data in {cfg.data_dir}')
     elif args.no_node:
-        _run_without_node(cfg)
+        _run_without_node(cfg, desktop_token)
     else:
-        _run(cfg)
+        _run(cfg, desktop_token)
 
 
 if __name__ == '__main__':

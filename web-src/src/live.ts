@@ -3,6 +3,25 @@ import type { History, Snapshot } from './types'
 
 export type LinkState = 'connecting' | 'live' | 'reconnecting'
 
+// Desktop app: the window opens at /#token=…; trade it for a session cookie
+// once, keep the token in memory for actions, and drop it from the address.
+let desktopToken: string | null = null
+export const getDesktopToken = () => desktopToken
+
+let sessionReady: Promise<void> | null = null
+
+function desktopSession(): Promise<void> {
+  // One handshake per page load, however often effects run.
+  sessionReady ??= (async () => {
+    const m = location.hash.match(/token=([0-9a-f]{32,})/)
+    if (!m) return
+    desktopToken = m[1]
+    history.replaceState(null, '', location.pathname)
+    await fetch('/api/session', { method: 'POST', headers: { 'X-Swap-Token': desktopToken } })
+  })()
+  return sessionReady
+}
+
 /** The daemon's snapshot, kept current over server-sent events. */
 export function useSnapshot() {
   const [snap, setSnap] = useState<Snapshot | null>(null)
@@ -29,12 +48,15 @@ export function useSnapshot() {
         retry = window.setTimeout(open, 3000)
       }
     }
-    // First paint without waiting for the stream
-    fetch('/api/snapshot').then((r) => r.json()).then((s: Snapshot) => {
-      skew.current = s.now - Date.now() / 1000
-      setSnap((cur) => cur ?? s)
-    }).catch(() => {})
-    open()
+    desktopSession().catch(() => {}).finally(() => {
+      if (closed) return
+      // First paint without waiting for the stream
+      fetch('/api/snapshot').then((r) => r.json()).then((s: Snapshot) => {
+        skew.current = s.now - Date.now() / 1000
+        setSnap((cur) => cur ?? s)
+      }).catch(() => {})
+      open()
+    })
     return () => { closed = true; es?.close(); window.clearTimeout(retry) }
   }, [])
 
