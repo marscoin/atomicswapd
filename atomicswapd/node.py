@@ -22,11 +22,18 @@ def wallet_password(env=os.environ) -> Optional[str]:
 
 def electrum_config(cfg: Config) -> SimpleConfig:
     os.makedirs(os.path.join(cfg.electrum_dir, 'wallets'), exist_ok=True)
-    return SimpleConfig({
+    options = {
         'electrum_path': cfg.electrum_dir,
         'auto_connect': True,
         'log_to_file': False,
-    })
+    }
+    # Electrum-Mars's built-in list names relays by IP. A relay with a real
+    # certificate only matches its hostname, so add it by name; otherwise the
+    # node can't reach it, and offers would only land on the other relays.
+    named = next((s for s in cfg.servers if s.tls_verify), None)
+    if named:
+        options['server'] = f'{named.host}:{named.port}:s'
+    return SimpleConfig(options)
 
 
 def create_wallet(cfg: Config, password: str) -> dict:
@@ -93,6 +100,7 @@ class Node:
         return {
             'connected': bool(net and net.is_connected()),
             'server': str(net.interface.server) if net and net.interface else None,
+            'relays': sorted(s.host for s in net.get_interfaces()) if net else [],
             'local_height': net.get_local_height() if net else None,
             'server_height': net.get_server_height() if net else None,
             'wallet_ready': wallet is not None,
