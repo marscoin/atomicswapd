@@ -328,17 +328,27 @@ class Service:
 
     async def _poll_history(self):
         url = 'https://api.coingecko.com/api/v3/coins/marscoin/market_chart?vs_currency={}&days=30'
+        retry = 60
         while not self.stop.is_set():
+            ok = True
             for key, cur in (('mars_btc', 'btc'), ('mars_usd', 'usd')):
                 try:
                     async with self.session.get(url.format(cur)) as resp:
                         resp.raise_for_status()
                         data = await resp.json(content_type=None)
-                    self.history[key] = [[int(t / 1000), p] for t, p in data.get('prices', [])]
+                    points = [[int(t / 1000), p] for t, p in data.get('prices', [])]
+                    if not points:
+                        raise ValueError('no price points')
+                    self.history[key] = points
                 except Exception as e:
-                    log.info('price history (%s): %s', cur, e)
+                    ok = False
+                    log.warning('price history (%s): %s', cur, e)
+            # A failed fetch (CoinGecko rate-limits its free API) is retried
+            # within minutes, not at the next half-hourly refresh.
+            delay = 1800 if ok else retry
+            retry = 60 if ok else min(retry * 2, 900)
             try:
-                await asyncio.wait_for(self.stop.wait(), 1800)
+                await asyncio.wait_for(self.stop.wait(), delay)
             except asyncio.TimeoutError:
                 pass
 
