@@ -74,7 +74,7 @@ export function useHistory() {
       let ready = false
       try {
         await desktopSession()
-        const h: History = await (await fetch('/api/history')).json()
+        const h: History = await (await fetch('/api/history', { cache: 'no-store' })).json()
         setHistory(h)
         ready = (h.mars_btc?.length ?? 0) > 0
       } catch { /* try again */ }

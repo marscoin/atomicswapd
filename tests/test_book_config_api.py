@@ -120,3 +120,17 @@ def test_example_config_matches_the_defaults():
     example = config.load(str(Path(__file__).parent.parent / 'atomicswapd.example.toml'), env={})
     default = config.load(env={})
     assert example == default
+
+
+def test_empty_history_is_never_cached():
+    class Svc(FakeService):
+        history = {'mars_btc': [], 'mars_usd': []}
+
+    async def go():
+        async with TestClient(TestServer(make_app(Svc()))) as client:
+            r = await client.get('/api/history')
+            assert r.headers['Cache-Control'] == 'no-store'
+        async with TestClient(TestServer(make_app(FakeService()))) as client:
+            r = await client.get('/api/history')
+            assert r.headers['Cache-Control'] == 'max-age=300'
+    asyncio.run(go())

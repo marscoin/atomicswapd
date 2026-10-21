@@ -117,7 +117,10 @@ def make_app(service, max_stream_clients: int = 200,
                             headers={'Cache-Control': 'no-store'})
 
     async def history(request):
-        return web.json_response(service.history, headers={'Cache-Control': 'max-age=300'})
+        # Never let a browser keep an empty answer from right after startup.
+        ready = bool(service.history.get('mars_btc'))
+        return web.json_response(service.history, headers={
+            'Cache-Control': 'max-age=300' if ready else 'no-store'})
 
     async def healthz(request):
         return web.json_response({'ok': True, 'revision': service.revision})
