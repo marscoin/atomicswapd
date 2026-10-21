@@ -1,0 +1,34 @@
+# atomicswapd configuration. Every setting is optional; these are the defaults.
+# Point the daemon at this file with --config or ATOMICSWAPD_CONFIG.
+
+# "watch": real wallet and data, posts and locks nothing. "live": trades.
+mode = "watch"
+data_dir = "/data"
+wallet_name = "maker"
+
+[maker]
+# Required for live mode (or set ATOMICSWAPD_BTC_ADDRESS).
+btc_receive_address = ""
+fee_percent = 5.0             # minimum spread over the market rate
+num_offers = 3                # tiers sized 1:2:3
+min_offer_mars = 10
+max_offer_mars = 1000
+daily_limit_mars = 10000
+reserve_percent = 20          # never offered
+inventory_cap_percent = 30    # locked in swaps + on offer, as a share of inventory
+offer_minutes = 15
+refresh_seconds = 300
+max_pending_per_taker = 1
+
+# Order-book relays the dashboard watches. The wallet itself uses
+# Electrum-Mars's server list.
+[[servers]]
+host = "electrum.marscoin.org"
+
+[[servers]]
+host = "147.182.177.23"
+tls_verify = false            # self-signed certificate
+
+[[servers]]
+host = "164.90.138.207"
+tls_verify = false

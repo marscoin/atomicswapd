@@ -1,0 +1,9 @@
+.git
+**/__pycache__
+**/*.pyc
+.venv
+web-src/node_modules
+atomicswapd/web
+tests
+*.db
+data

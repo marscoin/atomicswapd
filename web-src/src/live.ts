@@ -1,0 +1,77 @@
+import { useEffect, useRef, useState } from 'react'
+import type { History, Snapshot } from './types'
+
+export type LinkState = 'connecting' | 'live' | 'reconnecting'
+
+/** The daemon's snapshot, kept current over server-sent events. */
+export function useSnapshot() {
+  const [snap, setSnap] = useState<Snapshot | null>(null)
+  const [link, setLink] = useState<LinkState>('connecting')
+  // Server clock minus ours, so countdowns agree with the daemon.
+  const skew = useRef(0)
+
+  useEffect(() => {
+    let es: EventSource | null = null
+    let retry: number | undefined
+    let closed = false
+    const open = () => {
+      es = new EventSource('/api/stream')
+      es.addEventListener('snapshot', (ev) => {
+        const s = JSON.parse((ev as MessageEvent).data) as Snapshot
+        skew.current = s.now - Date.now() / 1000
+        setSnap(s)
+        setLink('live')
+      })
+      es.onerror = () => {
+        es?.close()
+        if (closed) return
+        setLink('reconnecting')
+        retry = window.setTimeout(open, 3000)
+      }
+    }
+    // First paint without waiting for the stream
+    fetch('/api/snapshot').then((r) => r.json()).then((s: Snapshot) => {
+      skew.current = s.now - Date.now() / 1000
+      setSnap((cur) => cur ?? s)
+    }).catch(() => {})
+    open()
+    return () => { closed = true; es?.close(); window.clearTimeout(retry) }
+  }, [])
+
+  return { snap, link, skew }
+}
+
+export function useHistory() {
+  const [history, setHistory] = useState<History | null>(null)
+  useEffect(() => {
+    let timer: number
+    const load = () => fetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {})
+    load()
+    timer = window.setInterval(load, 5 * 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return history
+}
+
+/** Re-render every `ms`, for clocks and countdowns. */
+export function useNow(ms = 1000, skewSec = 0) {
+  const [now, setNow] = useState(() => Date.now() / 1000 + skewSec)
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now() / 1000 + skewSec), ms)
+    return () => window.clearInterval(t)
+  }, [ms, skewSec])
+  return now
+}
+
+/** Briefly true whenever `value` changes, to flash updated numbers. */
+export function useFlash(value: unknown, ms = 900) {
+  const [flash, setFlash] = useState(false)
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) { first.current = false; return }
+    setFlash(true)
+    const t = window.setTimeout(() => setFlash(false), ms)
+    return () => window.clearTimeout(t)
+  }, [value, ms])
+  return flash
+}

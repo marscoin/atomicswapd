@@ -4,7 +4,7 @@ A headless market maker for **BTC ↔ MARS atomic swaps**.
 
 `atomicswapd` is the first maker on an open exchange, not the exchange itself. The exchange is the protocol: the order book relayed by Marscoin's ElectrumX servers, plus hash time-locked contracts (HTLCs) on both chains. Anyone with an [Electrum-Mars](https://github.com/marscoin/electrum-mars) wallet can take an offer, and anyone can run this daemon to make their own.
 
-> **Status: design stage.** Nothing here handles real money yet. The first milestone runs on Bitcoin testnet only.
+> **Status: first release.** Runs on mainnet: Marscoin has no public test network to swap against. The daemon starts in **watch** mode, with a real wallet and real data, posting and locking nothing. Switching to **live** is one setting. Keep the hot wallet small.
 
 ## How a swap works
 
@@ -20,9 +20,9 @@ Either both sides happen or neither does. The shorter Bitcoin refund protects th
 ## What the daemon does
 
 - Runs an Electrum-Mars wallet without a GUI and drives its swap engine: posting offers, locking MARS, claiming BTC, refunding stalled swaps.
-- Watches Bitcoin through public APIs (mempool.space, checked against Blockstream before each claim), so no Bitcoin node is needed.
+- Watches Bitcoin through mempool.space's public API, so no Bitcoin node is needed. A second source checked before each claim is planned.
 - Publishes a read-only JSON API and a public dashboard: the live order book, inventory, and every completed swap with links to both transactions, plus success and refund rates.
-- Optionally runs a chat agent that answers questions about the market and explains why a swap is waiting. **The public agent is read-only.** It cannot change limits or touch the wallet.
+- Planned: a chat agent that answers questions about the market and explains why a swap is waiting. **The public agent will be read-only.** It cannot change limits or touch the wallet.
 
 ## Safety rules
 
@@ -56,15 +56,61 @@ These are requirements, not settings:
 
 The swap logic lives in Electrum-Mars (`electrum_mars/plugins/atomic_swap`). This daemon packages it for servers and adds operations: limits, monitoring, the API and the dashboard. Protocol changes go to Electrum-Mars first, so desktop wallets and the daemon always agree.
 
+## Running it
+
+The daemon needs Electrum-Mars 4.4.2 or later and the libsecp256k1 version it pins; the Docker image builds both.
+
+```sh
+docker build -t atomicswapd .
+docker run -p 8080:8080 -v swapdata:/data -e ATOMICSWAPD_WALLET_PASSWORD=... atomicswapd
+```
+
+Create the hot wallet once. The seed is printed once; write it down offline:
+
+```sh
+docker exec -it <container> atomicswapd wallet create
+```
+
+Then restart, send MARS to the deposit address shown on the dashboard, set a Bitcoin payout address, and switch to live:
+
+```sh
+-e ATOMICSWAPD_BTC_ADDRESS=bc1... -e ATOMICSWAPD_MODE=live
+```
+
+Settings and their defaults are in [`atomicswapd.example.toml`](atomicswapd.example.toml). `fly.toml` deploys a single machine with a volume to fly.io. Run exactly one instance per wallet.
+
+### API
+
+All read-only:
+- `GET /api/snapshot`: everything the dashboard shows.
+- `GET /api/stream`: the same snapshot as server-sent events, on every change.
+- `GET /api/history`: seven days of MARS/BTC and MARS/USD market prices.
+- `GET /healthz`
+
+No keys, secrets or swap preimages are ever part of a response.
+
+### Development
+
+```sh
+pip install -e '.[dev]'     # plus Electrum-Mars, e.g. pip install -e ../electrum-mars
+pytest
+atomicswapd --no-node       # dashboard on real relay and market data, no wallet
+cd web-src && npm install && npm run dev
+```
+
 ## Milestones
 
-1. **Testnet maker.**
-   - Headless daemon on Bitcoin testnet and a Marscoin test network.
-   - Read-only JSON API and a minimal dashboard.
-   - Inventory cap and per-buyer limits.
-   - Docker image.
-2. **Public testnet.** A hosted testnet instance with its own dashboard, a written threat model, and end-to-end swaps with Electrum-Mars desktop wallets.
-3. **Mainnet with small amounts**, after a review of the code and the operating setup.
+1. **First maker (this release).**
+   - Headless daemon on mainnet, built on the Electrum-Mars swap engine.
+   - Exposure cap, a daily limit from real history, one swap per buyer.
+   - Live read-only API and dashboard.
+   - Docker image and fly.io deployment.
+2. **Hardening.**
+   - A second Bitcoin data source (Blockstream) checked before each claim.
+   - A written threat model.
+   - Alerts to the operator.
+   - Better limits for repeat buyers.
+3. **Two-way market**: buying MARS for BTC as well as selling it.
 
 ## Related
 
