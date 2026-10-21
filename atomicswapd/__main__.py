@@ -33,10 +33,12 @@ async def _serve(service, cfg, desktop_token):
     return runner
 
 
-def _exit_with_parent():
+def _exit_with_parent(stop):
     """Desktop mode: the app holds our stdin open. When it quits or crashes,
-    stdin closes; shut down cleanly instead of running on as an orphan."""
-    import _thread
+    stdin closes; call ``stop`` to shut down cleanly instead of running on
+    as an orphan."""
+    if sys.stdin is None or sys.stdin.isatty():
+        return
 
     def watch():
         try:
@@ -45,7 +47,7 @@ def _exit_with_parent():
         except Exception:
             pass
         logging.getLogger(__name__).info('the desktop app went away; stopping')
-        _thread.interrupt_main()      # same path as Ctrl-C: save, then exit
+        stop()
     threading.Thread(target=watch, name='parent-watch', daemon=True).start()
 
 
@@ -55,6 +57,10 @@ def _run(cfg, desktop_token=None):
 
     node = Node(cfg).start()
     service = Service(cfg, node)
+    if desktop_token:
+        # Ask Electrum to stop: it saves the wallet, and its main-thread wait
+        # returns (a simulated Ctrl-C wouldn't wake that wait).
+        _exit_with_parent(lambda: asyncio.run_coroutine_threadsafe(node.daemon.stop(), node.loop))
 
     async def main():
         runner = await _serve(service, cfg, desktop_token)
@@ -94,6 +100,9 @@ def _run_without_node(cfg, desktop_token=None):
 
     async def main():
         service = Service(cfg, node=None)
+        if desktop_token:
+            loop = asyncio.get_running_loop()
+            _exit_with_parent(lambda: loop.call_soon_threadsafe(service.stop.set))
         runner = await _serve(service, cfg, desktop_token)
         try:
             await service.run()
@@ -220,6 +229,8 @@ def main(argv=None):
         sys.exit(_selftest())
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    # Our own messages at INFO even after Electrum-Mars adjusts the root logger.
+    logging.getLogger('atomicswapd').setLevel(logging.INFO)
     # Electrum-Mars logs every request at INFO; keep it quiet unless asked.
     logging.getLogger('electrum_mars').setLevel(
         os.environ.get('ATOMICSWAPD_ELECTRUM_LOG', 'WARNING').upper() or 'WARNING')
@@ -235,8 +246,6 @@ def main(argv=None):
         cfg.api_port = args.port
     if args.desktop:
         cfg.api_host = '127.0.0.1'
-        if not sys.stdin.isatty():
-            _exit_with_parent()
         desktop_token = os.environ.get(DESKTOP_TOKEN_ENV)
         if not desktop_token:
             import secrets
