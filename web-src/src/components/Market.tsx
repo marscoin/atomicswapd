@@ -3,7 +3,7 @@ import { AreaSeries, ColorType, createChart, LineStyle, type IChartApi, type ISe
   type UTCTimestamp } from 'lightweight-charts'
 import type { History, Snapshot } from '../types'
 import type { LinkState } from '../live'
-import { fmt, int, usd, duration } from '../format'
+import { ago, fmt, int, usd, duration } from '../format'
 import { orbits } from '../orbits'
 import { Card, Dot, MarsLogo, Num, Pill } from './ui'
 
@@ -20,12 +20,21 @@ export function TopBar({ snap, link, now }: { snap: Snapshot | null; link: LinkS
         </div>
       </div>
       <div className="ticker">
-        <Tick label="Price"><Num value={m?.sats_per_mars} format={(n) => fmt(n, 2)} className="big" /> <span className="unit">sats</span></Tick>
-        <Tick label="MARS / USD"><Num value={m?.mars_usd} format={(n) => usd(n, 4)} /></Tick>
-        <Tick label="BTC / USD"><Num value={m?.btc_usd} format={(n) => usd(n, 0)} /></Tick>
-        <Tick label="Marscoin block"><Num value={snap?.chains.mars.height} format={int} className="mars" /></Tick>
-        <Tick label="Bitcoin block"><Num value={snap?.chains.btc.height} format={int} className="btc" /></Tick>
-        <Tick label="Earth → Mars light"><span className="num light-tick">{duration(light)}</span></Tick>
+        <Tick label="Price" source="MARS/USD ÷ BTC/USD, in satoshis per MARS. Market reference only; swaps are priced by each offer.">
+          <Num value={m?.sats_per_mars} format={(n) => fmt(n, 2)} className="big" /> <span className="unit">sats</span></Tick>
+        <Tick label="MARS / USD" source="CoinMarketCap, via price.marscoin.org. Refreshed every minute.">
+          <Num value={m?.mars_usd} format={(n) => usd(n, 4)} /></Tick>
+        <Tick label="BTC / USD" source="mempool.space price API. Refreshed every minute.">
+          <Num value={m?.btc_usd} format={(n) => usd(n, 0)} /></Tick>
+        <Tick label="Marscoin block" source={`Tip reported by the Marscoin ElectrumX relays (header subscription, pushed on every block).${
+            snap?.chains.mars.tip_time ? ` Mined ${ago(snap.chains.mars.tip_time, now)} by the miner's clock.` : ''}`}>
+          <Num value={snap?.chains.mars.height} format={int} className="mars" /></Tick>
+        <Tick label="Bitcoin block" href={snap?.chains.btc.height ? `https://mempool.space/block/${snap.chains.btc.height}` : undefined}
+          source={`mempool.space, checked every 20 seconds.${snap?.chains.btc.tip_time ? ` Mined ${ago(snap.chains.btc.tip_time, now)}.` : ''}${
+            snap?.chains.btc.fee_fast != null ? ` Next-block fee ${snap.chains.btc.fee_fast} sat/vB.` : ''} Click to open.`}>
+          <Num value={snap?.chains.btc.height} format={int} className="btc" /></Tick>
+        <Tick label="Earth → Mars light" source={`Computed in your browser from JPL's approximate planetary orbits: ${fmt(orbits(now).au, 3)} AU right now.`}>
+          <span className="num light-tick">{duration(light)}</span></Tick>
       </div>
       <div className="topbar-right">
         {snap?.setup?.stage === 'syncing' && (
@@ -48,8 +57,13 @@ export function TopBar({ snap, link, now }: { snap: Snapshot | null; link: LinkS
   )
 }
 
-function Tick({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="tick"><div className="tick-label">{label}</div><div className="tick-value">{children}</div></div>
+function Tick({ label, source, href, children }:
+  { label: string; source?: string; href?: string; children: React.ReactNode }) {
+  const body = <><div className="tick-label">{label}{source && <span className="src-i">i</span>}</div>
+    <div className="tick-value">{children}</div></>
+  return href
+    ? <a className="tick" href={href} target="_blank" rel="noreferrer" data-src={source}>{body}</a>
+    : <div className="tick" data-src={source}>{body}</div>
 }
 
 const RANGES = { '24H': 86400, '7D': 7 * 86400 } as const

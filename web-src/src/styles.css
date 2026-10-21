@@ -52,7 +52,14 @@ b { font-weight: 600; }
 .brand-pair { font-weight: 700; font-size: 17px; letter-spacing: 0.4px; }
 .swap-glyph { color: var(--mars); margin: 0 2px; }
 .brand-sub { font-size: 11px; color: var(--dim); letter-spacing: 0.3px; }
-.ticker { display: flex; gap: 26px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+.ticker { display: flex; gap: 26px; flex: 1; scrollbar-width: none; }
+.tick { position: relative; color: inherit; }
+a.tick:hover .tick-value { text-decoration: underline dotted; }
+.src-i { display: inline-grid; place-items: center; width: 12px; height: 12px; margin-left: 5px; border-radius: 50%; font-size: 8.5px; font-style: italic;
+  font-family: Georgia, serif; text-transform: none; letter-spacing: 0; color: var(--faint); border: 1px solid var(--faint); vertical-align: 1px; }
+.tick[data-src]:hover::after { content: attr(data-src); position: absolute; top: calc(100% + 10px); left: -6px; z-index: 40; width: 280px;
+  padding: 10px 12px; border-radius: 10px; background: #15151f; border: 1px solid var(--line2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  color: var(--text); font-size: 12px; line-height: 1.5; font-family: var(--sans); white-space: normal; pointer-events: none; }
 .tick-label { font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.9px; white-space: nowrap; }
 .tick-value { font-size: 14px; white-space: nowrap; margin-top: 2px; }
 .tick-value .big { font-size: 17px; font-weight: 600; color: #fff; }
@@ -326,7 +333,8 @@ b { font-weight: 600; }
   .col-chart, .col-book, .col-swap { grid-column: auto; grid-row: auto; }
   .col-swap { order: -1; }
   .topbar { flex-wrap: wrap; gap: 12px; }
-  .ticker { order: 3; width: 100%; }
+  .ticker { order: 3; width: 100%; flex-wrap: wrap; gap: 12px 22px; }
+  .tick[data-src]:hover::after { display: none; }
   .tl-steps { grid-template-columns: 1fr 1fr; }
   .light { grid-template-columns: 1fr; justify-items: center; }
 }
