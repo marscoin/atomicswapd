@@ -33,6 +33,22 @@ async def _serve(service, cfg, desktop_token):
     return runner
 
 
+def _exit_with_parent():
+    """Desktop mode: the app holds our stdin open. When it quits or crashes,
+    stdin closes; shut down cleanly instead of running on as an orphan."""
+    import _thread
+
+    def watch():
+        try:
+            while sys.stdin.read(1024):
+                pass
+        except Exception:
+            pass
+        logging.getLogger(__name__).info('the desktop app went away; stopping')
+        _thread.interrupt_main()      # same path as Ctrl-C: save, then exit
+    threading.Thread(target=watch, name='parent-watch', daemon=True).start()
+
+
 def _run(cfg, desktop_token=None):
     from .node import Node
     from .service import Service
@@ -197,6 +213,8 @@ def main(argv=None):
         cfg.api_port = args.port
     if args.desktop:
         cfg.api_host = '127.0.0.1'
+        if not sys.stdin.isatty():
+            _exit_with_parent()
         desktop_token = os.environ.get(DESKTOP_TOKEN_ENV)
         if not desktop_token:
             import secrets
