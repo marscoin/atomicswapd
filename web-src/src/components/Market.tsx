@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AreaSeries, ColorType, createChart, LineStyle, type IChartApi, type ISeriesApi,
-  type UTCTimestamp } from 'lightweight-charts'
+import { AreaSeries, ColorType, createChart, LastPriceAnimationMode, LineStyle, type IChartApi,
+  type ISeriesApi, type UTCTimestamp } from 'lightweight-charts'
 import type { History, Snapshot } from '../types'
 import type { LinkState } from '../live'
 import { ago, fmt, int, usd, duration } from '../format'
@@ -103,6 +103,8 @@ export function PriceChart({ history, snap }: { history: History | null; snap: S
     series.current = c.addSeries(AreaSeries, {
       lineColor: '#ff6a3d', lineWidth: 2, topColor: 'rgba(255,106,61,0.35)',
       bottomColor: 'rgba(255,106,61,0.0)', priceLineColor: '#ff6a3d',
+      // A pulsing dot on the newest point: the price is live.
+      lastPriceAnimation: LastPriceAnimationMode.Continuous,
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
     })
     chart.current = c
@@ -113,8 +115,12 @@ export function PriceChart({ history, snap }: { history: History | null; snap: S
     if (!series.current || !chart.current || !points.length) return
     series.current.setData(points)
     const last = points[points.length - 1].time as number
-    chart.current.timeScale().setVisibleRange({
-      from: (last - RANGES[range]) as UTCTimestamp, to: last as UTCTimestamp })
+    const first = points.findIndex((p) => (p.time as number) >= last - RANGES[range])
+    // A few empty slots after the newest point keep the pulsing dot clear
+    // of the price scale.
+    const lastIdx = points.length - 1
+    const pad = Math.max(2, Math.round((lastIdx - Math.max(first, 0)) * 0.03))
+    chart.current.timeScale().setVisibleLogicalRange({ from: Math.max(first, 0), to: lastIdx + pad })
   }, [points, range])
 
   const change = useMemo(() => {
