@@ -16,19 +16,21 @@ export function SwapBox({ snap, selected, onSelect }:
   const offers = snap?.book ?? []
   const open = offers.filter((o) => !o.taken && o.safety.safe)
   const [amount, setAmount] = useState('')
+  const [touched, setTouched] = useState(false)   // until then, suggest the best offer
   const [howTo, setHowTo] = useState(false)
 
   const chosen = useMemo(() => {
     if (selected) return offers.find((o) => o.id === selected) ?? null
     const n = parseFloat(amount)
-    return n > 0 ? bestFit(offers, n) : open.slice().sort((a, b) => a.rate - b.rate)[0] ?? null
-  }, [selected, amount, offers])
+    if (n > 0) return bestFit(offers, n)
+    return touched ? null : open.slice().sort((a, b) => a.rate - b.rate)[0] ?? null
+  }, [selected, amount, offers, touched])
 
   // Clicking an offer in the book fills in its price.
   useEffect(() => {
     if (selected) {
       const o = offers.find((x) => x.id === selected)
-      if (o) setAmount(o.btc.toFixed(8))
+      if (o) { setAmount(o.btc.toFixed(8)); setTouched(true) }
       else onSelect(null)
     }
   }, [selected])
@@ -37,6 +39,11 @@ export function SwapBox({ snap, selected, onSelect }:
   const t = snap?.timeline
   const typed = parseFloat(amount)
   const tooSmall = typed > 0 && !chosen && open.length > 0
+  // Show what is actually paid: the chosen offer's exact price, unless the
+  // buyer typed a budget (then a note shows the exact price within it).
+  const shown = touched ? amount : chosen ? chosen.btc.toFixed(8) : ''
+  const payBtc = touched ? typed : chosen?.btc
+  const budgetDiffers = touched && chosen != null && Math.abs(typed - chosen.btc) > 1e-9
   const cheapest = open.slice().sort((a, b) => a.btc - b.btc)[0]
   const feeSats = snap?.chains.btc.fee_fast ? Math.round(snap.chains.btc.fee_fast * FUNDING_VBYTES) : null
 
@@ -44,12 +51,14 @@ export function SwapBox({ snap, selected, onSelect }:
     <Card className="swap-card" title="Swap" right={<Pill tone="dim">BTC → MARS</Pill>}>
       <div className="swap-field">
         <div className="swap-label"><span>You pay</span>
-          {m?.btc_usd && typed > 0 && <span className="muted">≈ {usd(typed * m.btc_usd)}</span>}</div>
+          {m?.btc_usd && payBtc ? <span className="muted">≈ {usd(payBtc * m.btc_usd)}</span> : null}</div>
         <div className="swap-input">
-          <input inputMode="decimal" placeholder="0.00000000" value={amount}
-            onChange={(e) => { onSelect(null); setAmount(e.target.value.replace(/[^0-9.]/g, '')) }} />
+          <input inputMode="decimal" placeholder="0.00000000" value={shown}
+            onChange={(e) => { onSelect(null); setTouched(true); setAmount(e.target.value.replace(/[^0-9.]/g, '')) }} />
           <span className="asset btc-asset"><i className="coin coin-btc" />BTC</span>
         </div>
+        {budgetDiffers && chosen && <div className="budget-note">
+          Best offer within this budget costs exactly <b className="num">{btc(chosen.btc)}</b> BTC. Offers fill completely.</div>}
         <div className="presets">
           {open.slice().sort((a, b) => a.btc - b.btc).slice(0, 4).map((o) => (
             <button key={o.id} onClick={() => onSelect(o.id)} className={chosen?.id === o.id ? 'on' : ''}>

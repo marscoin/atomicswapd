@@ -164,6 +164,7 @@ a.tick:hover .tick-value { text-decoration: underline dotted; }
 .btc-asset { background: var(--btc-soft); color: var(--btc); }
 .mars-asset { background: var(--mars-soft); color: var(--mars); }
 .presets { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.budget-note { margin-top: 6px; font-size: 11.5px; color: var(--warn); }
 .presets button { padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line2); font-size: 11.5px; color: var(--dim); font-family: var(--mono); }
 .presets button:hover, .presets button.on { color: #fff; border-color: rgba(255, 106, 61, 0.5); background: var(--mars-soft); }
 .swap-arrow { width: 34px; height: 34px; margin: -10px auto; position: relative; z-index: 1; display: grid; place-items: center;
