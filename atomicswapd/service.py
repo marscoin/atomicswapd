@@ -16,6 +16,51 @@ from .market import MarketFeed
 log = logging.getLogger(__name__)
 
 MAX_TRACKED_OFFERS = 40
+HEADER_SLACK = 12          # blocks behind the relays that still count as synced
+
+
+def setup_stage(maker: dict, *, mode: str, payout_set: bool, cap_percent: float) -> dict:
+    """The setup stage of a maker, from its public status, plus the next step."""
+    node = maker.get('node') or {}
+    bal = maker.get('balance')
+    min_inventory = round(policy.MIN_BALANCE_THRESHOLD_MARS / (cap_percent / 100))
+
+    def stage(name, next_step, **extra):
+        return {'stage': name, 'next': next_step, 'min_inventory_mars': min_inventory, **extra}
+
+    if not node.get('wallet_ready'):
+        err = node.get('wallet_error') or 'the wallet is not loaded'
+        if err.startswith('no wallet'):
+            return stage('needs_wallet', 'Create the hot wallet: atomicswapd wallet create '
+                         '--seed-file /data/seed-backup.txt, then restart.')
+        return stage('wallet_error', f'Fix the wallet: {err}')
+    local, server = node.get('local_height'), node.get('server_height')
+    if not (local and server) or local < server - HEADER_SLACK:
+        pct = round(local / server * 100, 1) if local and server else 0
+        return stage('syncing', f'Wait: downloading Marscoin headers ({pct}%).', progress=pct)
+    if not node.get('wallet_synced'):
+        return stage('syncing', 'Wait: the wallet is catching up with its history.', progress=100)
+    if maker.get('error'):
+        return stage('maker_error', f'Fix the maker: {maker["error"]}')
+    inventory = (bal or {}).get('inventory') or 0
+    if inventory <= 0:
+        return stage('needs_funds', f'Send MARS to {(bal or {}).get("deposit_address")} '
+                     f'(at least {min_inventory} MARS before any offer is posted).')
+    if inventory < min_inventory:
+        return stage('needs_funds', f'Inventory is {inventory:,.0f} MARS; offers start at '
+                     f'{min_inventory} MARS. Send more to {bal.get("deposit_address")}.')
+    if not payout_set:
+        return stage('needs_payout_address', 'Set ATOMICSWAPD_BTC_ADDRESS to a Bitcoin '
+                     'address you control.')
+    if mode != 'live':
+        if not maker.get('plan'):
+            return stage('waiting_for_price', 'Wait for a fresh market price.')
+        return stage('ready', 'Review "Would post now" on the dashboard, then set '
+                     'ATOMICSWAPD_MODE=live.')
+    if not maker.get('offers'):
+        return stage('live', 'Live. The first offers are posted at the next refresh '
+                     '(every few minutes).')
+    return stage('live', 'Live and posting offers.')
 
 
 class Service:
@@ -77,35 +122,72 @@ class Service:
 
     # ------------------------------------------------------------ maker
 
-    def start_maker(self):
-        """Wire up Electrum-Mars's swap engine around the hot wallet."""
+    async def start_maker(self):
+        """Wire up Electrum-Mars's swap engine around the hot wallet.
+
+        The engine, worker and Auto-Maker run on Electrum's own event loop,
+        like in the desktop wallet. The dashboard runs on a separate loop so
+        wallet work (header checks, signing) never stalls it.
+        """
         if not (self.node and self.node.wallet):
             return
+
+        async def on_node_loop():
+            self._create_maker()
+        try:
+            await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(on_node_loop(), self.node.loop))
+        except Exception as e:
+            self.maker_error = str(e)
+            log.exception('maker did not start')
+            self.event('maker', f'Maker did not start: {e}')
+            return
+        if self.cfg.mode == 'live':
+            self.event('maker', 'Maker is live: posting offers')
+        else:
+            self.event('maker', 'Maker is watching: nothing is posted or locked')
+
+    def _create_maker(self):
         from electrum_mars.plugins.atomic_swap.orderbook import OrderBook
         from electrum_mars.plugins.atomic_swap.swap_engine import SwapEngine
         from .maker import CappedAutoMaker, GuardedSwapWorker, check_btc_address
         from .node import wallet_password
         import os
-        try:
-            if self.cfg.mode == 'live':
-                check_btc_address(self.cfg.maker.btc_receive_address)
-            os.makedirs(self.cfg.swaps_dir, exist_ok=True)
-            self.engine = SwapEngine(self.node.wallet, self.node.network, self.cfg.swaps_dir)
-            self.orderbook = OrderBook()
-            # The worker always runs: swaps already in progress must be
-            # finished or refunded even in watch mode.
-            self.worker = GuardedSwapWorker(self.engine, self.cfg, wallet_password())
-            self.worker.start()
-            self.automaker = CappedAutoMaker(self.engine, self.orderbook, self.cfg, self.market)
-            if self.cfg.mode == 'live':
-                self.automaker.start()
-                self.event('maker', 'Maker is live: posting offers')
-            else:
-                self.event('maker', 'Maker is watching: nothing is posted or locked')
-        except Exception as e:
-            self.maker_error = str(e)
-            log.exception('maker did not start')
-            self.event('maker', f'Maker did not start: {e}')
+        if self.cfg.mode == 'live':
+            check_btc_address(self.cfg.maker.btc_receive_address)
+        os.makedirs(self.cfg.swaps_dir, exist_ok=True)
+        self.engine = SwapEngine(self.node.wallet, self.node.network, self.cfg.swaps_dir)
+        self.orderbook = OrderBook()
+        # The worker always runs: swaps already in progress must be
+        # finished or refunded even in watch mode.
+        self.worker = GuardedSwapWorker(self.engine, self.cfg, wallet_password())
+        self.worker.start()
+        self.automaker = CappedAutoMaker(self.engine, self.orderbook, self.cfg, self.market)
+        if self.cfg.mode == 'live':
+            self.automaker.start()
+
+    def _my_offers(self) -> list:
+        """Our posted offers, read from the dashboard thread without
+        touching the order book's own (mutating) helpers."""
+        if not self.orderbook:
+            return []
+        now = time.time()
+        for _ in range(3):
+            try:
+                return [o for o in list(self.orderbook._my_offers.values()) if o.expires_at > now]
+            except RuntimeError:   # changed while we read it
+                continue
+        return []
+
+    def setup_status(self, maker: dict) -> dict:
+        """Where this maker is in its setup, and the one thing to do next.
+
+        Meant for operators and for agents running the daemon: the same
+        answer appears on the dashboard, in /api/snapshot and in
+        `atomicswapd status`.
+        """
+        return setup_stage(maker, mode=self.cfg.mode,
+                           payout_set=bool(self.cfg.maker.btc_receive_address),
+                           cap_percent=self.cfg.maker.inventory_cap_percent)
 
     def maker_status(self) -> dict:
         node = self.node.status() if self.node else {'wallet_ready': False,
@@ -125,7 +207,8 @@ class Service:
         maker_swaps = [s for s in swaps if s.role == 'maker']
         locked = locked_sat(maker_swaps)
         inventory = confirmed + locked
-        on_offer = sum(o.mars_amount_sat for o in self.orderbook.get_my_offers())
+        my_offers = self._my_offers()
+        on_offer = sum(o.mars_amount_sat for o in my_offers)
         out['balance'] = {
             'confirmed': confirmed / policy.COIN,
             'unconfirmed': unconfirmed / policy.COIN,
@@ -140,7 +223,7 @@ class Service:
         out['offers'] = [{'id': o.offer_id[:12], 'mars': o.mars_amount_sat / policy.COIN,
                           'btc': o.btc_amount_sat / policy.COIN, 'rate': o.rate,
                           'expires_in': round(o.expires_at - now)}
-                         for o in self.orderbook.get_my_offers()]
+                         for o in my_offers]
         shown = [s for s in sorted(maker_swaps, key=lambda s: s.updated_at, reverse=True)
                  if s.state != 'expired'][:25]
         out['swaps'] = [public_swap(s) for s in shown]
@@ -180,9 +263,7 @@ class Service:
     # ------------------------------------------------------------ order book
 
     def _our_offer_ids(self) -> set:
-        if not self.orderbook:
-            return set()
-        return {o.offer_id for o in self.orderbook.get_my_offers()}
+        return {o.offer_id for o in self._my_offers()}
 
     def _public_offers(self) -> List[dict]:
         m = self.market.market if self.market else None
@@ -216,7 +297,8 @@ class Service:
             self.offers = merged
             await self._poll_acceptances()
             if self.automaker:
-                self.automaker.expire_stale_offers()
+                # Swap state belongs to Electrum's loop; change it there.
+                self.node.loop.call_soon_threadsafe(self.automaker.expire_stale_offers)
             self._track_swaps()
             self.touch()
             try:
@@ -263,6 +345,7 @@ class Service:
     def snapshot(self) -> dict:
         m = self.market.market if self.market else None
         offers = self._public_offers()
+        maker = self.maker_status()
         return {
             'version': __version__,
             'revision': self.revision,
@@ -283,7 +366,8 @@ class Service:
             'book': offers,
             'depth': book.depth(offers),
             'timeline': policy.timeline(self.mars_height, m.btc_height if m else None),
-            'maker': self.maker_status(),
+            'maker': maker,
+            'setup': self.setup_status(maker),
             'events': list(self.events)[-60:],
         }
 
@@ -295,7 +379,7 @@ class Service:
                                              headers={'User-Agent': f'atomicswapd/{__version__}'})
         self.market = MarketFeed(self.session)
         self.market.on_btc_block = self._on_btc_block
-        self.start_maker()
+        await self.start_maker()
         tasks = [asyncio.create_task(r.run(self.stop)) for r in self.relays]
         tasks.append(asyncio.create_task(self.market.run(self.stop, self.cfg.market_seconds)))
         tasks.append(asyncio.create_task(self._poll_book()))

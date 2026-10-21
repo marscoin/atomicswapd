@@ -28,6 +28,12 @@ export function TopBar({ snap, link, now }: { snap: Snapshot | null; link: LinkS
         <Tick label="Earth → Mars light"><span className="num light-tick">{duration(light)}</span></Tick>
       </div>
       <div className="topbar-right">
+        {snap?.setup?.stage === 'syncing' && (
+          <span className="syncing" title="The maker's node is downloading and verifying Marscoin headers">
+            <span className="spinner" />Syncing Marscoin {snap.setup.progress != null && snap.setup.progress < 100
+              ? `${fmt(snap.setup.progress, 1)}%` : 'wallet'}
+          </span>
+        )}
         <Pill tone={snap?.mode === 'live' ? 'live' : 'warn'}
           title={snap?.mode === 'live' ? 'The maker posts offers and settles swaps'
             : 'Real data; the maker posts nothing yet'}>

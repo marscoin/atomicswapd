@@ -66,6 +66,7 @@ export interface Snapshot {
   depth: { sats_per_mars: number; cumulative_mars: number }[]
   timeline: Timeline | null
   maker: MakerStatus
+  setup?: { stage: string; next: string; min_inventory_mars: number; progress?: number }
   events: ActivityEvent[]
 }
 

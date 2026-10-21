@@ -7,7 +7,6 @@ kill_timeout = 30
 
 [env]
   ATOMICSWAPD_DATA = "/data"
-  ATOMICSWAPD_MODE = "watch"
 
 [mounts]
   source = "maker_data"

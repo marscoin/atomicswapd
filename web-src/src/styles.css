@@ -61,6 +61,9 @@ b { font-weight: 600; }
 .tick-value .btc { color: var(--btc); }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .link { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--dim); }
+.syncing { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--warn); font-family: var(--mono); white-space: nowrap; }
+.spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255, 195, 87, 0.25); border-top-color: var(--warn); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .num.flash { animation: flash 0.9s ease-out; }
 @keyframes flash { 0% { color: #fff; text-shadow: 0 0 12px rgba(255, 140, 100, 0.9); } 100% { text-shadow: none; } }
@@ -188,6 +191,9 @@ b { font-weight: 600; }
 
 /* ---------------------------------------------------------------- maker */
 .maker-setup { padding: 8px 2px 4px; }
+.next-step { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; padding: 10px 12px; border-radius: 10px;
+  background: var(--warn-soft); border: 1px solid rgba(255, 195, 87, 0.25); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.next-stage { font-size: 10.5px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase; color: var(--warn); }
 .setup-title { font-weight: 600; margin-bottom: 4px; }
 .gauge { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 12px; position: relative; }
 .gauge svg circle { fill: none; stroke-width: 12; }

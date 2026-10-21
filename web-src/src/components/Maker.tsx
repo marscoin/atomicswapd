@@ -8,9 +8,16 @@ export function MakerPanel({ snap }: { snap: Snapshot | null }) {
   const b = mk?.balance
   const node = mk?.node
   const live = mk?.mode === 'live'
+  const setup = snap?.setup
   return (
     <Card className="maker-card" title="This maker"
       right={<Pill tone={live ? 'live' : 'warn'}>{live ? 'LIVE' : 'WATCH'}</Pill>}>
+      {setup && setup.stage !== 'live' && (
+        <div className="next-step">
+          <span className="next-stage">{setup.stage.replace(/_/g, ' ')}</span>
+          <span>{setup.next}</span>
+        </div>
+      )}
       {!node?.wallet_ready ? (
         <div className="maker-setup">
           <div className="setup-title">{snap ? 'Wallet not ready' : 'Loading…'}</div>

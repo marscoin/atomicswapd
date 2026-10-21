@@ -6,7 +6,6 @@ from typing import Optional
 
 from electrum_mars import util
 from electrum_mars.daemon import Daemon
-from electrum_mars.logging import configure_logging
 from electrum_mars.simple_config import SimpleConfig
 from electrum_mars.wallet import Abstract_Wallet, create_new_wallet
 
@@ -27,7 +26,6 @@ def electrum_config(cfg: Config) -> SimpleConfig:
         'electrum_path': cfg.electrum_dir,
         'auto_connect': True,
         'log_to_file': False,
-        'verbosity': os.environ.get('ATOMICSWAPD_ELECTRUM_LOG', ''),
     })
 
 
@@ -68,7 +66,6 @@ class Node:
     def start(self):
         self.loop, _stopping, _thread = util.create_and_start_event_loop()
         config = electrum_config(self.cfg)
-        configure_logging(config)
         self.daemon = Daemon(config, listen_jsonrpc=False)
         if not os.path.exists(self.cfg.wallet_path):
             self.wallet_error = 'no wallet yet (run: atomicswapd wallet create)'

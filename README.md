@@ -56,33 +56,105 @@ These are requirements, not settings:
 
 The swap logic lives in Electrum-Mars (`electrum_mars/plugins/atomic_swap`). This daemon packages it for servers and adds operations: limits, monitoring, the API and the dashboard. Protocol changes go to Electrum-Mars first, so desktop wallets and the daemon always agree.
 
-## Running it
+## Run your own maker
 
-The daemon needs Electrum-Mars 4.4.2 or later and the libsecp256k1 version it pins; the Docker image builds both.
+Anyone can run a maker. It takes about 15 minutes of your time and an hour of waiting while the node downloads Marscoin's block headers. You need:
+
+- some MARS to sell (at least about **700 MARS**: with the default 30% exposure cap, the Auto-Maker's 200 MARS minimum per round means an inventory of 667 MARS or more)
+- a Bitcoin address you control, for the proceeds
+- somewhere to run one small Linux container: fly.io (below), any VPS, or a home server
+
+AI agents: see [AGENTS.md](AGENTS.md) for the same procedure with checks at every step.
+
+### On fly.io (about $6 a month)
+
+[Install flyctl](https://fly.io/docs/flyctl/install/), run `fly auth login`, clone this repo, and pick a unique app name:
+
+```sh
+deploy/fly.sh my-mars-maker          # app, 3 GB volume, random wallet password, deploy
+```
+
+The script is safe to run again. It generates the wallet password on your machine, stores it as a fly secret and never prints it. Your dashboard is now at `https://my-mars-maker.fly.dev`, in **watch** mode.
+
+Create the hot wallet. Either print the seed once and write it down:
+
+```sh
+fly ssh console -a my-mars-maker -C "atomicswapd wallet create"
+```
+
+or write it to a private file, copy it off, and delete it (handy when someone else runs the commands):
+
+```sh
+fly ssh console -a my-mars-maker -C "atomicswapd wallet create --seed-file /data/seed-backup.txt"
+fly ssh sftp get /data/seed-backup.txt -a my-mars-maker      # keep it offline
+fly ssh console -a my-mars-maker -C "rm /data/seed-backup.txt"
+```
+
+Then:
+
+```sh
+fly apps restart my-mars-maker                                        # load the wallet
+fly secrets set ATOMICSWAPD_BTC_ADDRESS=bc1q... -a my-mars-maker      # your payout address
+```
+
+Send MARS to the deposit address on the dashboard. Send a few MARS first to check your wallet can send to a `mars1` address. Watch the setup stage:
+
+```sh
+atomicswapd status https://my-mars-maker.fly.dev     # or: curl -s .../api/snapshot | jq .setup
+```
+
+When it says `ready`, look at **Would post now** on the dashboard. If those offers are what you want to sell, go live:
+
+```sh
+fly secrets set ATOMICSWAPD_MODE=live -a my-mars-maker
+```
+
+To pause, set `ATOMICSWAPD_MODE=watch`. Swaps already in progress always finish or refund, in either mode.
+
+### With Docker anywhere
 
 ```sh
 docker build -t atomicswapd .
-docker run -p 8080:8080 -v swapdata:/data -e ATOMICSWAPD_WALLET_PASSWORD=... atomicswapd
+docker volume create swapdata
+umask 077 && printf 'ATOMICSWAPD_WALLET_PASSWORD=%s\n' "$(openssl rand -hex 32)" > maker.env
+docker run -d --name maker --restart unless-stopped -p 8080:8080 -v swapdata:/data --env-file maker.env atomicswapd
 ```
 
-Create the hot wallet once. The seed is printed once; write it down offline:
+`maker.env` holds the wallet password (readable only by you); the container needs it on every start. Then:
 
-```sh
-docker exec -it <container> atomicswapd wallet create
-```
+1. Create the wallet: `docker exec maker atomicswapd wallet create --seed-file /data/seed-backup.txt`. Copy the seed out with `docker cp maker:/data/seed-backup.txt .`, store it offline, and delete both copies.
+2. Add `ATOMICSWAPD_BTC_ADDRESS=bc1q...` to `maker.env`, then recreate the container (`docker rm -f maker` and the `docker run` line again).
+3. Fund the wallet and wait until `docker exec maker atomicswapd status` says `ready`.
+4. Add `ATOMICSWAPD_MODE=live` to `maker.env` and recreate the container.
 
-Then restart, send MARS to the deposit address shown on the dashboard, set a Bitcoin payout address, and switch to live:
+Put it behind HTTPS (Caddy, nginx or a tunnel) if the dashboard is public.
 
-```sh
--e ATOMICSWAPD_BTC_ADDRESS=bc1... -e ATOMICSWAPD_MODE=live
-```
+### Rules for operators
 
-Settings and their defaults are in [`atomicswapd.example.toml`](atomicswapd.example.toml). `fly.toml` deploys a single machine with a volume to fly.io. Run exactly one instance per wallet.
+- **One instance per wallet.** Two makers sharing a wallet would post duplicate offers and race each other.
+- **Keep the seed offline.** The server holds the wallet file and its password, so it can always spend; the seed is how you recover elsewhere.
+- **Keep the hot wallet small.** The exposure cap limits what is locked in swaps at once; anything in the wallet is at risk if the server is compromised.
+- **Withdraw profits.** BTC goes straight to your payout address; move surplus MARS out with any Electrum-Mars wallet restored from the seed. Stop the maker first: `ATOMICSWAPD_MODE=watch`.
+- **Back up the volume** if you can. The swap database lets a restarted maker finish swaps in progress.
+
+### Configuration
+
+Environment variables cover the essentials:
+
+| Variable | Meaning |
+|---|---|
+| `ATOMICSWAPD_WALLET_PASSWORD` | Encrypts the wallet file. Required. |
+| `ATOMICSWAPD_BTC_ADDRESS` | Where BTC from swaps goes. Required for live. |
+| `ATOMICSWAPD_MODE` | `watch` (default) or `live`. |
+| `ATOMICSWAPD_DATA` | Data directory (default `/data`). |
+| `ATOMICSWAPD_CONFIG` | Optional TOML file for everything else. |
+
+Everything else (spread, offer sizes, exposure cap, reserve, daily limit, relays) is in [`atomicswapd.example.toml`](atomicswapd.example.toml), with the defaults.
 
 ### API
 
 All read-only:
-- `GET /api/snapshot`: everything the dashboard shows.
+- `GET /api/snapshot`: everything the dashboard shows, including `setup` (stage and next step).
 - `GET /api/stream`: the same snapshot as server-sent events, on every change.
 - `GET /api/history`: seven days of MARS/BTC and MARS/USD market prices.
 - `GET /healthz`
