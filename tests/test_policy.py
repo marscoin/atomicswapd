@@ -14,6 +14,19 @@ def test_fresh_auto_maker_offer_is_safe():
     assert s['safe'] is True and s['margin_sec'] > policy.MIN_REFUND_GAP_SEC
 
 
+def test_offer_with_the_longer_maker_lock_is_safe():
+    s = policy.offer_safety(MARS_H + 480, MARS_H, BTC_H)
+    assert s['safe'] is True and s['margin_sec'] > policy.MIN_REFUND_GAP_SEC
+
+
+def test_maker_lock_follows_the_installed_engine():
+    from electrum_mars import atomic_swap_htlc as htlc
+    assert policy.MARS_MAKER_TIMELOCK_BLOCKS == getattr(
+        htlc, 'MARS_MAKER_TIMELOCK_BLOCKS', htlc.MARS_TIMELOCK_BLOCKS)
+    assert policy.MARS_MAKER_TIMELOCK_BLOCKS in (234, 480)
+    assert policy.MARS_TIMELOCK_BLOCKS == 234
+
+
 def test_aged_offer_is_unsafe():
     # ~29 Marscoin blocks per hour; an hour-old offer no longer leaves the margin.
     s = policy.offer_safety(MARS_H + policy.MARS_TIMELOCK_BLOCKS - 30, MARS_H, BTC_H)
@@ -27,7 +40,7 @@ def test_unknown_heights():
 def test_safety_matches_wallet_rule():
     # Same numbers as electrum_mars.plugins.atomic_swap.safety.refund_order_problem
     from electrum_mars.plugins.atomic_swap import safety as wallet
-    for mars_lock in range(MARS_H + 150, MARS_H + 300, 7):
+    for mars_lock in range(MARS_H + 150, MARS_H + 520, 7):
         ours = policy.offer_safety(mars_lock, MARS_H, BTC_H)['safe']
         theirs = wallet.refund_order_problem(mars_lock, MARS_H, BTC_H + 24, BTC_H) is None
         assert ours == theirs, mars_lock
@@ -36,7 +49,8 @@ def test_safety_matches_wallet_rule():
 def test_timeline():
     t = policy.timeline(MARS_H, BTC_H)
     assert t['btc_refund_height'] == BTC_H + 24
-    assert t['mars_refund_height'] == MARS_H + 234
+    assert t['mars_refund_height'] == MARS_H + policy.MARS_MAKER_TIMELOCK_BLOCKS
+    assert t['mars_refund_sec'] == policy.MARS_MAKER_TIMELOCK_BLOCKS * policy.MARS_BLOCK_SEC
     assert t['margin_sec'] == t['mars_refund_sec_fast'] - t['btc_refund_sec_slow'] > 3600
     assert policy.timeline(None, BTC_H) is None
 
