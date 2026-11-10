@@ -23,7 +23,7 @@ RUN git clone https://github.com/bitcoin-core/secp256k1.git /secp \
 
 # ---------------------------------------------------------------- runtime
 FROM python:3.11-slim-bookworm
-ARG ELECTRUM_MARS_REF=v4.4.2
+ARG ELECTRUM_MARS_REF=v4.4.4
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     ATOMICSWAPD_DATA=/data
