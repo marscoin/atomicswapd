@@ -14,7 +14,7 @@ A headless market maker for **BTC ↔ MARS atomic swaps**.
 
 1. The maker posts an offer to the ElectrumX order book: so much MARS for so much BTC.
 2. A buyer's wallet accepts it. Nothing is paid yet.
-3. **The maker locks the MARS first**, in a lockbox only the buyer can open with a secret. The maker can take it back after about 8 hours (234 Marscoin blocks).
+3. **The maker locks the MARS first**, in a lockbox only the buyer can open with a secret. The maker can take it back after about 16 hours (480 Marscoin blocks; makers on Electrum-Mars releases before the longer lock use 234 blocks, about 8 hours).
 4. The buyer's wallet checks that lock against its own copy of the Marscoin chain. Only then does it show where to send BTC. That lockbox refunds the buyer after about 4 hours (24 Bitcoin blocks).
 5. The maker claims the BTC, which reveals the secret on the Bitcoin chain.
 6. The buyer's wallet reads the secret and claims the MARS.

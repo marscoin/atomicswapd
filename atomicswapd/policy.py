@@ -13,7 +13,16 @@ COIN = 100_000_000
 
 # Swap protocol (electrum_mars/atomic_swap_htlc.py)
 BTC_TIMELOCK_BLOCKS = 24
-MARS_TIMELOCK_BLOCKS = 234
+MARS_TIMELOCK_BLOCKS = 234          # what older makers lock; wallets still accept it
+# What this maker locks. The swap engine of the installed Electrum-Mars
+# decides, so the timeline shows what it really does: 234 blocks before
+# the release that introduced MARS_MAKER_TIMELOCK_BLOCKS, 480 from then on.
+try:
+    from electrum_mars import atomic_swap_htlc as _htlc
+    MARS_MAKER_TIMELOCK_BLOCKS = getattr(_htlc, 'MARS_MAKER_TIMELOCK_BLOCKS',
+                                         _htlc.MARS_TIMELOCK_BLOCKS)
+except ImportError:
+    MARS_MAKER_TIMELOCK_BLOCKS = 480
 BTC_BLOCK_SEC = 600
 MARS_BLOCK_SEC = 123
 
@@ -63,18 +72,18 @@ def offer_safety(mars_locktime: int, mars_height: Optional[int],
 
 
 def timeline(mars_height: Optional[int], btc_height: Optional[int]) -> Optional[dict]:
-    """The refund schedule of a swap that started now."""
+    """The refund schedule of a swap this maker started now."""
     if not (mars_height and btc_height):
         return None
     btc_refund = btc_height + BTC_TIMELOCK_BLOCKS
-    mars_refund = mars_height + MARS_TIMELOCK_BLOCKS
+    mars_refund = mars_height + MARS_MAKER_TIMELOCK_BLOCKS
     return {
         'btc_height': btc_height,
         'mars_height': mars_height,
         'btc_refund_height': btc_refund,
         'mars_refund_height': mars_refund,
         'btc_refund_sec': BTC_TIMELOCK_BLOCKS * BTC_BLOCK_SEC,
-        'mars_refund_sec': MARS_TIMELOCK_BLOCKS * MARS_BLOCK_SEC,
+        'mars_refund_sec': MARS_MAKER_TIMELOCK_BLOCKS * MARS_BLOCK_SEC,
         'btc_refund_sec_slow': round(btc_refund_seconds(btc_refund, btc_height)),
         'mars_refund_sec_fast': round(mars_refund_seconds(mars_refund, mars_height)),
         'margin_sec': round(refund_margin_seconds(mars_refund, mars_height, btc_refund, btc_height)),
