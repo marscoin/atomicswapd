@@ -11,7 +11,7 @@ from atomicswapd.api import make_app
 NOW = time.time()
 
 
-def raw(oid='o1', mars=1000, btc=90_000, expires=600, seen=1.0, locktime=3_000_234):
+def raw(oid='o1', mars=1000, btc=90_000, expires=600, seen=1.0, locktime=3_000_480):
     return {'offer_id': oid, 'mars_amount_sat': mars * 10**8, 'btc_amount_sat': btc,
             'expires_at': NOW + expires, 'last_seen': seen, 'mars_locktime': locktime,
             'maker_address': 'MaBcDeFgHiJkLmNoP', 'maker_pubkey': '02' + 'aa' * 32}

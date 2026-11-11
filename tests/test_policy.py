@@ -9,9 +9,10 @@ BTC_H, MARS_H = 900_000, 3_000_000
 
 # ---------------------------------------------------------------- safety
 
-def test_fresh_auto_maker_offer_is_safe():
+def test_offer_with_the_old_short_lock_is_refused():
+    # 234 blocks can pass in under four hours; the Bitcoin refund may take five.
     s = policy.offer_safety(MARS_H + policy.MARS_TIMELOCK_BLOCKS, MARS_H, BTC_H)
-    assert s['safe'] is True and s['margin_sec'] > policy.MIN_REFUND_GAP_SEC
+    assert s['safe'] is False and 'too soon' in s['reason']
 
 
 def test_offer_with_the_longer_maker_lock_is_safe():
@@ -28,8 +29,8 @@ def test_maker_lock_follows_the_installed_engine():
 
 
 def test_aged_offer_is_unsafe():
-    # ~29 Marscoin blocks per hour; an hour-old offer no longer leaves the margin.
-    s = policy.offer_safety(MARS_H + policy.MARS_TIMELOCK_BLOCKS - 30, MARS_H, BTC_H)
+    # A 480-block offer has about 128 blocks of slack before wallets refuse it.
+    s = policy.offer_safety(MARS_H + 480 - 130, MARS_H, BTC_H)
     assert s['safe'] is False and 'too soon' in s['reason']
 
 

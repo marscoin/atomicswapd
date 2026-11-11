@@ -28,7 +28,10 @@ MARS_BLOCK_SEC = 123
 
 # Wallet safety margins (electrum_mars/plugins/atomic_swap/safety.py)
 BTC_SLOW = 1.25
-MARS_FAST = 0.85
+# 0.5 since the wallets of November 2026: Marscoin is mined in bursts, and the
+# fastest 234 blocks of the previous month took 3.25 hours. A lock needs about
+# 352 blocks left; the old 234-block lock is refused.
+MARS_FAST = 0.5
 MIN_REFUND_GAP_SEC = 3600
 MIN_BTC_WINDOW_SEC = 2 * 3600
 
@@ -56,7 +59,7 @@ def refund_margin_seconds(mars_locktime: int, mars_height: int,
 
 def offer_safety(mars_locktime: int, mars_height: Optional[int],
                  btc_height: Optional[int]) -> dict:
-    """Would a 4.4.2 wallet accept this offer right now?
+    """Would a current wallet accept this offer right now?
 
     The taker's BTC refund would open BTC_TIMELOCK_BLOCKS from now; the
     MARS refund must open at least an hour later, pessimistically.
