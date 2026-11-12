@@ -5,6 +5,10 @@
 mode = "watch"
 data_dir = "/data"
 wallet_name = "maker"
+# The public address of the dashboard, e.g. "https://swaps.example.org", used in
+# the documents for AI agents (/llms.txt, /openapi.json). Empty: taken from each
+# request. Also ATOMICSWAPD_PUBLIC_URL.
+public_url = ""
 
 [maker]
 # Required for live mode (or set ATOMICSWAPD_BTC_ADDRESS).

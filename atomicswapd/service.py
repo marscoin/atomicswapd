@@ -383,6 +383,49 @@ class Service:
             'events': list(self.events)[-60:],
         }
 
+    # ------------------------------------------------------------ agent API
+
+    def agent_state(self) -> dict:
+        """The public state behind /api/v1, before any formatting.
+
+        The same data as the snapshot: the merged order book, the market
+        feed, the chain tips, and the maker's swaps reduced to amounts,
+        states and times. Never keys, secrets, addresses or balances.
+        """
+        m = self.market.market if self.market else None
+        swaps = []
+        if self.engine:
+            swaps = [{'id': s.swap_id[:8], 'state': s.state,
+                      'mars_amount_sat': s.mars_amount_sat, 'btc_amount_sat': s.btc_amount_sat,
+                      'created_at': s.created_at, 'updated_at': s.updated_at,
+                      'accepted': bool(s.peer_pubkey)}
+                     for s in self.engine.get_all_swaps() if s.role == 'maker']
+        return {
+            'version': __version__,
+            'mode': self.cfg.mode,
+            'market': m,
+            'max_price_age_seconds': self.cfg.max_price_age_seconds,
+            'mars_height': self.mars_height,
+            'mars_tip_time': self.mars_tip_time,
+            'offers': dict(self.offers),
+            'taken': set(self.taken),
+            'ours': self._our_offer_ids(),
+            'maker_running': bool(self.engine) and not self.maker_error,
+            'maker_swaps': swaps,
+            'relays': [{'host': s.host, 'port': s.port, 'tls_verify': s.tls_verify}
+                       for s in self.cfg.servers],
+            'relays_connected': sum(1 for r in self.relays if r.connected),
+            'maker_config': {
+                'offer_minutes': self.cfg.maker.offer_minutes,
+                'refresh_seconds': self.cfg.maker.refresh_seconds,
+                'max_pending_per_taker': self.cfg.maker.max_pending_per_taker,
+                'min_offer_mars': self.cfg.maker.min_offer_mars,
+                'max_offer_mars': self.cfg.maker.max_offer_mars,
+            },
+            'poll_seconds': self.cfg.poll_seconds,
+            'public_url': self.cfg.public_url,
+        }
+
     # ------------------------------------------------------------ run
 
     async def _wait_for_price(self, timeout: float):
