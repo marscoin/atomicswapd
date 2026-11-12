@@ -564,7 +564,10 @@ def test_openapi_is_valid_and_complete():
     # Every route the server has is documented, and nothing else.
     app = make_app(FakeService())
     served = {r.resource.canonical for r in app.router.routes()} - {'/'}
-    assert set(doc['paths']) == served
+    # The dashboard's own files are present only when the web app has been built.
+    from atomicswapd.api import WEB_DIR
+    built = {'/assets'} | ({f'/{p.name}' for p in WEB_DIR.iterdir() if p.is_file()} if WEB_DIR.is_dir() else set())
+    assert set(doc['paths']) == served - built
     operation_ids = []
     for path, item in doc['paths'].items():
         assert set(item) == {'get'}, path
