@@ -75,6 +75,10 @@ class Config:
     api_host: str = '0.0.0.0'
     api_port: int = 8080
     max_stream_clients: int = 200
+    # The address the public reaches this node at, e.g. https://swaps.example.org.
+    # Used in the documents written for AI agents (/llms.txt, /openapi.json).
+    # Empty: taken from each request.
+    public_url: str = ''
 
     @property
     def electrum_dir(self) -> str:
@@ -114,6 +118,8 @@ class Config:
                               'than the offer lifetime')
         if m.max_pending_per_taker < 1:
             raise ConfigError('maker.max_pending_per_taker must be at least 1')
+        if self.public_url and not self.public_url.startswith(('http://', 'https://')):
+            raise ConfigError('public_url must start with http:// or https://')
         if self.poll_seconds < 2 or self.market_seconds < 10:
             raise ConfigError('poll_seconds >= 2 and market_seconds >= 10, please')
         return self
@@ -157,6 +163,8 @@ def load(path: Optional[str] = None, env=os.environ) -> Config:
             cfg.maker.fee_percent = float(env['ATOMICSWAPD_FEE_PERCENT'])
         except ValueError:
             raise ConfigError('ATOMICSWAPD_FEE_PERCENT must be a number, e.g. 8')
+    if env.get('ATOMICSWAPD_PUBLIC_URL'):
+        cfg.public_url = env['ATOMICSWAPD_PUBLIC_URL'].strip().rstrip('/')
     if env.get('PORT'):
         cfg.api_port = int(env['PORT'])
     return cfg.validate()
