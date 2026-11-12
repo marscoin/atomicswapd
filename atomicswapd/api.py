@@ -3,6 +3,9 @@
 On a public server the API is read-only: there are no write endpoints,
 and the snapshot is built from an allow-list of public fields.
 
+For AI agents the public server also has a versioned read API under
+/api/v1 and four documents describing it (agentroutes.py). GET only.
+
 In desktop mode (the Mars Swap app) the engine listens on 127.0.0.1 only,
 and the API belongs to the app window alone: the window trades a
 per-launch token for a strict same-site session cookie, every API call
@@ -20,6 +23,8 @@ from pathlib import Path
 from typing import Optional
 
 from aiohttp import web
+
+from .agentroutes import DOC_PATHS, add_agent_routes, v1_errors
 
 log = logging.getLogger(__name__)
 
@@ -96,7 +101,7 @@ def security_headers(desktop: bool):
         resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
         resp.headers.setdefault('Referrer-Policy', 'no-referrer')
         resp.headers.setdefault('Content-Security-Policy', CSP)
-        if request.path.startswith('/api/') and not desktop:
+        if not desktop and (request.path.startswith('/api/') or request.path in DOC_PATHS):
             resp.headers.setdefault('Access-Control-Allow-Origin', '*')
         return resp
     return headers
@@ -107,7 +112,7 @@ def make_app(service, max_stream_clients: int = 200,
     cache = SnapshotCache(service)
     clients = set()
     auth = DesktopAuth(desktop_token) if desktop_token else None
-    middlewares = [security_headers(desktop=auth is not None)]
+    middlewares = [security_headers(desktop=auth is not None), v1_errors]
     if auth:
         middlewares.insert(0, desktop_guard(auth))
     app = web.Application(middlewares=middlewares)
@@ -171,6 +176,9 @@ def make_app(service, max_stream_clients: int = 200,
     app.router.add_get('/api/history', history)
     app.router.add_get('/api/stream', stream)
     app.router.add_get('/healthz', healthz)
+    if not auth:
+        # Public servers only: the desktop app's engine is private to its window.
+        add_agent_routes(app, service)
     app.router.add_get('/', index)
     if (WEB_DIR / 'assets').is_dir():
         app.router.add_static('/assets/', WEB_DIR / 'assets', append_version=False)
