@@ -42,6 +42,25 @@ These are requirements, not settings:
 - **Hot wallet only.** The daemon holds only the inventory it is selling. Profits are swept out.
 - **The operator interface is private** and separate from anything the public can reach.
 
+## For AI agents
+
+A node serves a read-only API written for programs, and four documents that describe it:
+
+- `/llms.txt`: what this is, the units, the endpoints, the safety rules, what can go wrong.
+- `/.well-known/agent.json` (also `/api/agent`), `/openapi.json` (OpenAPI 3.1) and `/api/tools` (tool definitions ready to hand to a model).
+- `/api/v1/market`, `/api/v1/offers`, `/api/v1/offers/{id}`, `/api/v1/quote`, `/api/v1/swaps/recent`: integer amounts with the unit in the field name, and a safety verdict on every offer.
+- `/api/v1/protocol`: how to take an offer with your own keys, derived from the wallet code.
+
+The server never takes an offer, a key or a payment for anyone. A reference client in [`agent/`](agent) reads the API, recomputes the safety checks instead of trusting the server, and serves the same tools over MCP:
+
+```sh
+cd agent
+python -m marsswap_agent quote --mars 250
+python -m marsswap_agent check-offer <offer id>
+```
+
+It does not handle keys or payments. [docs/AGENTS-API.md](docs/AGENTS-API.md) has the details, including the two ways an agent can carry out a swap. To run a maker with an agent's help, see [AGENTS.md](AGENTS.md).
+
 ## Architecture
 
 ```
@@ -177,6 +196,7 @@ Environment variables cover the essentials:
 | `ATOMICSWAPD_MODE` | `watch` (default) or `live`. |
 | `ATOMICSWAPD_FEE_PERCENT` | Minimum spread over the market price (default 5). |
 | `ATOMICSWAPD_DATA` | Data directory (default `/data`). |
+| `ATOMICSWAPD_PUBLIC_URL` | The dashboard's public address, used in the documents for AI agents. Optional. |
 | `ATOMICSWAPD_CONFIG` | Optional TOML file for everything else. |
 
 Everything else (spread, offer sizes, exposure cap, reserve, daily limit, relays) is in [`atomicswapd.example.toml`](atomicswapd.example.toml), with the defaults.
@@ -188,6 +208,7 @@ All read-only:
 - `GET /api/stream`: the same snapshot as server-sent events, on every change.
 - `GET /api/history`: 30 days of hourly MARS/BTC and MARS/USD market prices.
 - `GET /healthz`
+- `GET /api/v1/...` and four discovery documents, for programs: see [For AI agents](#for-ai-agents).
 
 No keys, secrets or swap preimages are ever part of a response.
 

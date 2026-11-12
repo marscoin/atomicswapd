@@ -44,6 +44,7 @@ export default function App() {
           <a href={REPO_URL} target="_blank" rel="noreferrer">Source</a>
           <a href={WALLET_URL} target="_blank" rel="noreferrer">Electrum-Mars</a>
           <a href={PAPER_URL} target="_blank" rel="noreferrer">InterPlanetary Atomic Swaps</a>
+          <a href="/llms.txt" target="_blank" rel="noreferrer">API for agents</a>
         </span>
       </footer>
     </div>
